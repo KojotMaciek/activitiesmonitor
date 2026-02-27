@@ -1,0 +1,15 @@
+{
+	"version": "2.0.0",
+	"tasks": [
+		{
+			"label": "Run Activity Monitor",
+			"type": "shell",
+			"command": "if [ -x \"${workspaceFolder}/.venv/bin/python\" ]; then \"${workspaceFolder}/.venv/bin/python\" \"${workspaceFolder}/activity_monitor.py\"; else python3 \"${workspaceFolder}/activity_monitor.py\"; fi",
+			"windows": {
+				"command": "if exist \"${workspaceFolder}\\.venv\\Scripts\\python.exe\" (\"${workspaceFolder}\\.venv\\Scripts\\python.exe\" \"${workspaceFolder}\\activity_monitor.py\") else (py \"${workspaceFolder}\\activity_monitor.py\")"
+			},
+			"isBackground": false,
+			"group": "build"
+		}
+	]
+}
