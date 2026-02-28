@@ -1,4 +1,5 @@
 import csv
+import calendar
 import sqlite3
 from datetime import datetime, date
 from pathlib import Path
@@ -168,6 +169,106 @@ def fetch_activities(
     return conn.execute(query, params).fetchall()
 
 
+class DatePickerPopup:
+    def __init__(self, parent: tk.Misc, target_var: tk.StringVar) -> None:
+        self.parent = parent
+        self.target_var = target_var
+
+        self.selected_date = self._parse_initial_date(target_var.get())
+        self.displayed_year = self.selected_date.year
+        self.displayed_month = self.selected_date.month
+
+        self.top = tk.Toplevel(parent)
+        self.top.title("Select date")
+        self.top.resizable(False, False)
+        self.top.transient(parent)
+        self.top.grab_set()
+
+        container = ttk.Frame(self.top, padding=10)
+        container.pack(fill="both", expand=True)
+
+        header = ttk.Frame(container)
+        header.pack(fill="x", pady=(0, 8))
+
+        ttk.Button(header, text="◀", width=3, command=self._prev_month).pack(side="left")
+        self.month_label = ttk.Label(header, anchor="center", font=("TkDefaultFont", 10, "bold"))
+        self.month_label.pack(side="left", fill="x", expand=True, padx=8)
+        ttk.Button(header, text="▶", width=3, command=self._next_month).pack(side="right")
+
+        self.days_frame = ttk.Frame(container)
+        self.days_frame.pack(fill="both", expand=True)
+
+        self._render_calendar()
+
+        self.top.bind("<Escape>", lambda _e: self.top.destroy())
+
+    def _parse_initial_date(self, value: str) -> date:
+        value = value.strip()
+        if not value:
+            return date.today()
+        try:
+            return datetime.strptime(value, "%Y-%m-%d").date()
+        except ValueError:
+            return date.today()
+
+    def _render_calendar(self) -> None:
+        for widget in self.days_frame.winfo_children():
+            widget.destroy()
+
+        self.month_label.config(text=f"{calendar.month_name[self.displayed_month]} {self.displayed_year}")
+
+        weekdays = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
+        for col, weekday in enumerate(weekdays):
+            ttk.Label(self.days_frame, text=weekday, anchor="center").grid(row=0, column=col, padx=2, pady=2, sticky="nsew")
+
+        cal = calendar.Calendar(firstweekday=0)
+        weeks = cal.monthdayscalendar(self.displayed_year, self.displayed_month)
+        today = date.today()
+
+        for row_idx, week in enumerate(weeks, start=1):
+            for col_idx, day in enumerate(week):
+                if day == 0:
+                    ttk.Label(self.days_frame, text=" ").grid(row=row_idx, column=col_idx, padx=2, pady=2, sticky="nsew")
+                    continue
+
+                is_today = (
+                    self.displayed_year == today.year
+                    and self.displayed_month == today.month
+                    and day == today.day
+                )
+                text = f"[{day:02d}]" if is_today else f"{day:02d}"
+                ttk.Button(
+                    self.days_frame,
+                    text=text,
+                    width=4,
+                    command=lambda d=day: self._select_day(d),
+                ).grid(row=row_idx, column=col_idx, padx=2, pady=2, sticky="nsew")
+
+        for col in range(7):
+            self.days_frame.columnconfigure(col, weight=1)
+
+    def _select_day(self, day: int) -> None:
+        selected = date(self.displayed_year, self.displayed_month, day)
+        self.target_var.set(selected.isoformat())
+        self.top.destroy()
+
+    def _prev_month(self) -> None:
+        if self.displayed_month == 1:
+            self.displayed_month = 12
+            self.displayed_year -= 1
+        else:
+            self.displayed_month -= 1
+        self._render_calendar()
+
+    def _next_month(self) -> None:
+        if self.displayed_month == 12:
+            self.displayed_month = 1
+            self.displayed_year += 1
+        else:
+            self.displayed_month += 1
+        self._render_calendar()
+
+
 class ActivityMonitorApp:
     ACTIVITIES = ["cycling", "hiking", "walking"]
 
@@ -236,6 +337,17 @@ class ActivityMonitorApp:
                 activity_cb = ttk.Combobox(form, textvariable=variable, values=self.ACTIVITIES, state="readonly", width=25)
                 activity_cb.grid(row=idx, column=1, sticky="w", padx=10, pady=8)
                 activity_cb.bind("<<ComboboxSelected>>", self.on_activity_change)
+            elif label_text == "Date (YYYY-MM-DD)":
+                date_entry = ttk.Entry(form, textvariable=variable, width=28)
+                date_entry.grid(row=idx, column=1, sticky="w", padx=10, pady=8)
+                date_entry.bind("<Button-1>", lambda event: self.open_date_picker(self.date_var, event))
+                ttk.Button(form, text="📅", width=3, command=lambda: self.open_date_picker(self.date_var)).grid(
+                    row=idx,
+                    column=2,
+                    sticky="w",
+                    padx=10,
+                    pady=8,
+                )
             else:
                 ttk.Entry(form, textvariable=variable, width=28).grid(row=idx, column=1, sticky="w", padx=10, pady=8)
 
@@ -268,20 +380,30 @@ class ActivityMonitorApp:
             textvariable=self.filter_activity_var,
             values=["all", *self.ACTIVITIES],
             state="readonly",
-            width=16,
+            width=12,
         ).grid(row=0, column=1, padx=8, pady=8, sticky="w")
 
-        ttk.Label(filters, text="From date (YYYY-MM-DD)").grid(row=0, column=2, padx=8, pady=8, sticky="w")
-        ttk.Entry(filters, textvariable=self.filter_from_var, width=18).grid(row=0, column=3, padx=8, pady=8, sticky="w")
+        ttk.Label(filters, text="From date").grid(row=0, column=2, padx=8, pady=8, sticky="w")
+        from_frame = ttk.Frame(filters)
+        from_frame.grid(row=0, column=3, padx=8, pady=8, sticky="w")
+        from_entry = ttk.Entry(from_frame, textvariable=self.filter_from_var, width=12)
+        from_entry.pack(side="left")
+        from_entry.bind("<Button-1>", lambda event: self.open_date_picker(self.filter_from_var, event))
+        ttk.Button(from_frame, text="📅", width=3, command=lambda: self.open_date_picker(self.filter_from_var)).pack(side="left", padx=(4, 0))
 
-        ttk.Label(filters, text="To date (YYYY-MM-DD)").grid(row=0, column=4, padx=8, pady=8, sticky="w")
-        ttk.Entry(filters, textvariable=self.filter_to_var, width=18).grid(row=0, column=5, padx=8, pady=8, sticky="w")
+        ttk.Label(filters, text="To date").grid(row=0, column=4, padx=8, pady=8, sticky="w")
+        to_frame = ttk.Frame(filters)
+        to_frame.grid(row=0, column=5, padx=8, pady=8, sticky="w")
+        to_entry = ttk.Entry(to_frame, textvariable=self.filter_to_var, width=12)
+        to_entry.pack(side="left")
+        to_entry.bind("<Button-1>", lambda event: self.open_date_picker(self.filter_to_var, event))
+        ttk.Button(to_frame, text="📅", width=3, command=lambda: self.open_date_picker(self.filter_to_var)).pack(side="left", padx=(4, 0))
 
         ttk.Label(filters, text="Min distance (km)").grid(row=1, column=0, padx=8, pady=8, sticky="w")
-        ttk.Entry(filters, textvariable=self.filter_min_distance_var, width=18).grid(row=1, column=1, padx=8, pady=8, sticky="w")
+        ttk.Entry(filters, textvariable=self.filter_min_distance_var, width=12).grid(row=1, column=1, padx=8, pady=8, sticky="w")
 
         ttk.Label(filters, text="Max distance (km)").grid(row=1, column=2, padx=8, pady=8, sticky="w")
-        ttk.Entry(filters, textvariable=self.filter_max_distance_var, width=18).grid(row=1, column=3, padx=8, pady=8, sticky="w")
+        ttk.Entry(filters, textvariable=self.filter_max_distance_var, width=12).grid(row=1, column=3, padx=8, pady=8, sticky="w")
 
         ttk.Button(filters, text="Apply filters", command=self.refresh_table).grid(row=1, column=4, padx=8, pady=8, sticky="w")
         ttk.Button(filters, text="Reset", command=self.reset_filters).grid(row=1, column=5, padx=8, pady=8, sticky="w")
@@ -340,6 +462,10 @@ class ActivityMonitorApp:
 
     def validate_date(self, value: str) -> None:
         validate_date(value)
+
+    def open_date_picker(self, target_var: tk.StringVar, _event=None):
+        DatePickerPopup(self.root, target_var)
+        return "break"
 
     def save_activity(self) -> None:
         try:
