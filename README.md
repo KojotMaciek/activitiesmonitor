@@ -21,6 +21,7 @@ Desktop app to track your sport activities:
   - activity type
   - date range
   - min/max distance
+- Popup calendar date picker for all date fields (click date field or 📅 button)
 - Show charts:
   - distance by activity
   - calories by activity
@@ -112,6 +113,10 @@ Notes:
 ## Input notes
 
 - Date format: `YYYY-MM-DD`
+  - You can type the date manually or pick it from the popup calendar.
+  - Date picker is available in:
+    - Add activity: `Date`
+    - Browse stats filters: `From date`, `To date`
 - Distance (km): decimal number (e.g. `12.4`)
 - Total time format:
   - `hh:mm`
