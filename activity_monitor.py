@@ -182,6 +182,10 @@ class ActivityMonitorApp:
         self.notebook = ttk.Notebook(self.root)
         self.notebook.pack(fill="both", expand=True, padx=8, pady=8)
 
+        self.status_var = tk.StringVar(value="")
+        self.status_label = ttk.Label(self.root, textvariable=self.status_var, foreground="#444")
+        self.status_label.pack(fill="x", padx=10, pady=(0, 8), anchor="w")
+
         self.add_tab = ttk.Frame(self.notebook)
         self.browse_tab = ttk.Frame(self.notebook)
 
@@ -191,6 +195,7 @@ class ActivityMonitorApp:
         self.build_add_tab()
         self.build_browse_tab()
         self.refresh_table()
+        self.update_status_bar()
 
     def create_table(self) -> None:
         create_activities_table(self.conn)
@@ -435,6 +440,17 @@ class ActivityMonitorApp:
                     calories,
                 ),
             )
+
+        self.update_status_bar()
+
+    def get_records_count(self) -> int:
+        row = self.conn.execute("SELECT COUNT(*) FROM activities").fetchone()
+        return int(row[0]) if row else 0
+
+    def update_status_bar(self) -> None:
+        count = self.get_records_count()
+        label = "record" if count == 1 else "records"
+        self.status_var.set(f"DB: {DB_PATH} | Total saved: {count} {label}")
 
     def reset_filters(self) -> None:
         self.filter_activity_var.set("all")
